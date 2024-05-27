@@ -1,0 +1,8 @@
+{
+    "turnhost":"143.107.165.26",
+    "turnport":"3478",
+    "realm":"stun.l.google.com",
+    "username":"test",
+    "userpass":"test123",
+    "secret":""
+}

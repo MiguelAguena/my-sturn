@@ -1,0 +1,79 @@
+#!/usr/bin/env vpython3
+import unittest
+from sturn import stun
+from sturn.stun.agent import Message, Address, Unknown
+from sturn.stun import attributes
+from sturn.utils import ha1
+
+class MessageTest(unittest.TestCase):
+    def setUp(self):
+        msg_data = bytes.fromhex(
+            '011300602112a442fedcb2d51f23946d'
+            '9cc9754e0009001000000401556e6175'
+            '74686f72697365640015001036303332'
+            '3763313731343561373738380014000a'
+            '7765627274632e6f72678e4f8022001a'
+            '4369747269782d312e382e372e302027'
+            '426c61636b20446f77270004'
+            '802800045a4c0c70' # Fingerprint
+        )
+        self.msg = Message.decode(msg_data)
+
+    def test_decode(self):
+        error_code = self.msg.get_attr(stun.ATTR_ERROR_CODE)
+        self.assertEqual(error_code.code, 401)
+        self.assertEqual(error_code.reason, 'Unauthorised')
+
+        nonce = self.msg.get_attr(stun.ATTR_NONCE)
+        self.assertEqual(nonce, b'60327c17145a7788')
+
+        realm = self.msg.get_attr(stun.ATTR_REALM)
+        self.assertEqual(realm, b'webrtc.org')
+
+        software = self.msg.get_attr(stun.ATTR_SOFTWARE)
+        self.assertEqual(software, b"Citrix-1.8.7.0 'Black Dow'")
+
+        fingerprint = self.msg.get_attr(stun.ATTR_FINGERPRINT)
+        self.assertEqual(fingerprint, bytes.fromhex('5a4c0c70'))
+
+    def test_encode(self):
+        msg = Message.encode(stun.METHOD_BINDING,
+                             stun.CLASS_REQUEST,
+                             transaction_id=b'fixedtransid')
+        # Override padding generation to make the message data deterministic
+        msg._padding = b'\x00'.__mul__ # Pad with zero bytes
+
+        msg.add_attr(type('Foo', (Unknown,), {'type': 0x6666}), b'data')
+        msg.add_attr(attributes.MappedAddress, Address.FAMILY_IPv4, 1337, '192.168.2.255')
+        msg.add_attr(attributes.Username, "johndoe")
+        msg.add_attr(attributes.MessageIntegrity, ha1('username', b'realm', 'password'))
+        msg.add_attr(attributes.ErrorCode, *stun.ERR_SERVER_ERROR)
+        msg.add_attr(attributes.UnknownAttributes, [0x1337, 0xb00b, 0xbeef])
+        msg.add_attr(attributes.Realm, b"pexip.com")
+        msg.add_attr(attributes.Nonce, bytes.fromhex('36303332376331373134356137373838'))
+        msg.add_attr(attributes.XorMappedAddress, Address.FAMILY_IPv4, 1337, '192.168.2.255')
+        msg.add_attr(attributes.Software, "\u8774\u8776 h\xfadi\xe9 'butterfly'")
+        msg.add_attr(attributes.AlternateServer, Address.FAMILY_IPv4, 8008, '192.168.2.128')
+        msg.add_attr(attributes.Fingerprint)
+
+        msg_data = bytes.fromhex(
+            '000100bc2112a4426669786564747261'
+            '6e736964666600046461746100010008'
+            '00010539c0a802ff000600076a6f686e'
+            '646f6500000800144ad36bd8d0c242f6'
+            'a2b98ccbcfe0f21432261fb400090010'
+            '00000500536572766572204572726f72'
+            '000a00061337b00bbeef000000140009'
+            '70657869702e636f6d00000000150010'
+            '36303332376331373134356137373838'
+            '002000080001242be1baa6bd8022001a'
+            'e89db4e89db62068c3ba6469c3a92027'
+            '627574746572666c7927000080230008'
+            '00011f48c0a8028080280004e43217b7'
+        )
+        self.assertEqual(bytes(msg), msg_data)
+
+
+if __name__ == "__main__":
+    #import sys;sys.argv = ['', 'Test.testName']
+    unittest.main()

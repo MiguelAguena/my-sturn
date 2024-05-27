@@ -1,0 +1,49 @@
+#!/usr/bin/env vpython3
+"""Usage:
+    {0} INTERFACE [PORT [CONFIG-FILE]]
+"""
+
+import os
+import sys
+import json
+import logging.config
+from twisted.internet import reactor
+from sturn.turn.server import TurnUdpServer
+from sturn.stun.authentication import LongTermCredentialMechanism
+
+
+try:
+    logging.config.fileConfig('logging.config')
+except:
+    logging.basicConfig(level=logging.DEBUG, format="%(levelname)s: %(message)s")
+    logging.exception("Failed to load 'logging.config' file")
+
+
+try:
+    interface = sys.argv[1]
+    options = [3478, 'sturn.config']
+    for i, option in enumerate(sys.argv[2:]):
+        options[i] = option
+    port = int(options[0])
+    config_file = options[1]
+except:
+    exit(__doc__.format(os.path.basename(__file__)))
+
+
+try:
+    with open(config_file) as fp:
+        config = json.load(fp)
+    software = config['software']
+    realm = config['realm']
+    users = config['users']
+    overrides = config.get('overrides') or {}
+except:
+    logging.exception("Failed to load config from %s", config_file)
+    exit(1)
+
+
+credential_mechanism = LongTermCredentialMechanism(realm, users)
+server = TurnUdpServer(reactor, interface, port, software, credential_mechanism, overrides)
+port = server.start()
+logging.info("Started %r", server)
+reactor.run()
